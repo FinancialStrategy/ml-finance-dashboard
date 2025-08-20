@@ -1,0 +1,13 @@
+services:
+  - type: web
+    name: ml-portfolio-dash
+    runtime: python
+    plan: free
+    envVars:
+      - key: PYTHONUNBUFFERED
+        value: "1"
+      # İsteğe bağlı:
+      # - key: USE_TF
+      #   value: "1"
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn app:server --workers=2 --threads=4 --timeout=120
