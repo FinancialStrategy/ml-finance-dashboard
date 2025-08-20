@@ -8,21 +8,23 @@ from sklearn.preprocessing import MinMaxScaler
 from tensorflow.keras.models import Sequential
 from tensorflow.keras.layers import LSTM, Dense, Dropout
 from pypfopt import EfficientFrontier, expected_returns, risk_models
+import os
 
+# Dash uygulaması
 app = dash.Dash(__name__)
-server = app.server  # Heroku için gerekli
+server = app.server  # Render için gerekli
 
-# --- Varsayılan Parametreler ---
+# Varsayılan parametreler
 TICKERS = ["GC=F", "SI=F", "CL=F", "^GSPC"]
 START_DATE = "2018-01-01"
 INITIAL_BUDGET = 1_000_000
 
-# --- Veri Çekme ---
+# Veri çekme fonksiyonu
 def get_data(tickers, start):
     df = yf.download(tickers, start=start, auto_adjust=True)["Close"]
     return df.dropna()
 
-# --- ML Tahmini ---
+# ML tahmin fonksiyonu
 def forecast_lstm(series, n_steps=20, epochs=30):
     scaler = MinMaxScaler()
     scaled = scaler.fit_transform(series.values.reshape(-1, 1))
@@ -48,7 +50,7 @@ def forecast_lstm(series, n_steps=20, epochs=30):
     idx = series.index[n_steps:]
     return pd.Series(pred.flatten(), index=idx)
 
-# --- Portföy Optimizasyonu ---
+# Portföy optimizasyonu
 def optimize_portfolio(prices, forecast_mu=None):
     mu = expected_returns.mean_historical_return(prices)
     if forecast_mu is not None:
@@ -59,20 +61,21 @@ def optimize_portfolio(prices, forecast_mu=None):
     weights = ef.max_sharpe()
     return ef.clean_weights(), ef.portfolio_performance()
 
-# --- Layout ---
+# Layout
 app.layout = html.Div([
     html.H1("ML Destekli Portföy Analizi"),
+    dcc.Interval(id="startup-trigger", interval=1000, n_intervals=0),
     dcc.Graph(id="ml-graph"),
     dcc.Graph(id="ef-graph"),
     dcc.Graph(id="perf-graph")
 ])
 
-# --- Callback (Statik Başlangıç) ---
+# Callback
 @app.callback(
     dash.dependencies.Output("ml-graph", "figure"),
     dash.dependencies.Output("ef-graph", "figure"),
     dash.dependencies.Output("perf-graph", "figure"),
-    dash.dependencies.Input("ml-graph", "id")  # Dummy trigger
+    dash.dependencies.Input("startup-trigger", "n_intervals")
 )
 def update_graphs(_):
     prices = get_data(TICKERS, START_DATE)
@@ -80,7 +83,7 @@ def update_graphs(_):
     sp500 = returns["^GSPC"].dropna()
     forecast = forecast_lstm(sp500)
 
-    # ML Grafiği
+    # ML grafiği
     fig_ml = go.Figure()
     fig_ml.add_trace(go.Scatter(x=sp500.index, y=sp500, name="Gerçek"))
     fig_ml.add_trace(go.Scatter(x=forecast.index, y=forecast, name="Tahmin"))
@@ -103,8 +106,9 @@ def update_graphs(_):
 
     return fig_ml, fig_ef, fig_perf
 
+# Port bind ve sunucu başlatma
 if __name__ == "__main__":
-    app.run_server(debug=True)
+    app.run_server(debug=False, host="0.0.0.0", port=int(os.environ.get("PORT", 8050)))
 import os
 
 if __name__ == "__main__":
